@@ -20,7 +20,7 @@ func main() {
 }
 
 func run() error {
-	connectionString := "postgres://postgres:postgres@localhost/**NAME-OF-YOUR-DATABASE-HERE**?sslmode=disable"
+	connectionString := "postgres://postgres:laredo@192.168.49.2:30201/weight-tracker?sslmode=disable"
 	db, err := setupDatabase(connectionString)
 
 	if err != nil {
