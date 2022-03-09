@@ -1,22 +1,77 @@
+---
+#Namespace
 apiVersion: v1
 kind: Namespace
 metadata:
   name: postgres
-
 ---
+#PV Postgres
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: weight-tracker-storage-db
+  labels:
+    type: local-db
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/k8s-storage/pv-postgres"
+---    
+#PV PgAdmin
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: weight-tracker-storage-db-admin
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 3Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/k8s-storage/pv-pgadmin"
+---
+#PVC Postgres
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: postgresql-pv
+  name: postgresql-pvc-postgres
   namespace: postgres
 spec:
+  storageClassName: standard
   accessModes:
     - ReadWriteOnce
+  selector:
+    matchLabels:
+      type: "local-db"
   resources:
     requests:
-      storage: 1Gi
-
+      storage: 5Gi
 ---
+#PVC Postgres
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgresql-pv-pgadmin
+  namespace: postgres
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  selector:
+    matchLabels:
+      type: "local"
+  resources:
+    requests:
+      storage: 3Gi
+---
+#Postgre
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -61,7 +116,7 @@ spec:
      volumes:
        - name: postgredb
          persistentVolumeClaim:
-           claimName: postgresql-pv
+           claimName: postgresql-pvc-postgres
 
 ---
 apiVersion: v1
@@ -78,6 +133,7 @@ spec:
   type: NodePort
 
 ---
+#PgAdmin
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -95,7 +151,7 @@ spec:
     spec:
       containers:
         - name: pgadmin4
-          image: dpage/pgadmin4
+          image: dpage/pgadmin4          
           resources:
            limits:
              cpu: "1"
@@ -110,9 +166,24 @@ spec:
              value: "admin"
            - name: PGADMIN_PORT
              value: "80"
+          volumeMounts:
+           - mountPath: /var/lib/pgadmin
+             name: pgadmin-mnt
           ports:
             - containerPort: 80
               name: pgadminport
+      initContainers:
+        - name: pgadmin-data-permission-fix
+          image: busybox
+          command: ["/bin/chown", "-R", "5050:5050", "/var/lib/pgadmin"]
+          #command: ["sh", "-c", "chown -R 5050:5050 /var/lib/pgadmin"]
+          volumeMounts:
+          - name: pgadmin-mnt
+            mountPath: /var/lib/pgadmin
+      volumes:
+       - name: pgadmin-mnt
+         persistentVolumeClaim:
+           claimName: postgresql-pv-pgadmin
 ---
 apiVersion: v1
 kind: Service
